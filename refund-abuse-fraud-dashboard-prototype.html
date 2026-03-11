@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Headout — Refund Intelligence</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #080c14; color: #e2e8f0; font-family: 'DM Sans', 'Segoe UI', sans-serif; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #0d1628; }
+    ::-webkit-scrollbar-thumb { background: #1e2d45; border-radius: 2px; }
+    button { cursor: pointer; font-family: inherit; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+const refundRequests = [
+  {
+    id: "RF-83472", customer: "marcus.t@email.com", experience: "Burj Khalifa At The Top",
+    value: 120, riskScore: 68, riskLevel: "high", tenure: "2 months",
+    signals: [
+      { label: "14 refunds in 6 months", type: "critical", icon: "↺" },
+      { label: "QR ticket scanned at entry", type: "critical", icon: "⬡" },
+      { label: "Cancellation 28 mins before slot", type: "critical", icon: "⏱" },
+      { label: "Payment method linked to 4 flagged cases", type: "warning", icon: "⚠" },
+    ],
+    recommendation: "Escalate to Fraud Review", bookingLead: "4 hours",
+    engagementMismatch: true, networkRisk: true,
+  },
+  {
+    id: "RF-83501", customer: "priya.r@email.com", experience: "London Eye Standard",
+    value: 48, riskScore: 22, riskLevel: "low", tenure: "3 years",
+    signals: [
+      { label: "First refund request ever", type: "positive", icon: "✓" },
+      { label: "Flight delay confirmation attached", type: "positive", icon: "✓" },
+      { label: "No engagement signals (ticket unused)", type: "positive", icon: "✓" },
+    ],
+    recommendation: "Auto Approve", bookingLead: "3 weeks",
+    engagementMismatch: false, networkRisk: false,
+  },
+  {
+    id: "RF-83529", customer: "john.w@email.com", experience: "Eiffel Tower Summit",
+    value: 220, riskScore: 45, riskLevel: "medium", tenure: "8 months",
+    signals: [
+      { label: "3 refunds in past 6 months", type: "warning", icon: "⚠" },
+      { label: "Cancellation 2 hours before slot", type: "warning", icon: "⏱" },
+      { label: "Email opened but QR not scanned", type: "neutral", icon: "◈" },
+    ],
+    recommendation: "Agent Review Required", bookingLead: "2 days",
+    engagementMismatch: false, networkRisk: false,
+  },
+  {
+    id: "RF-83541", customer: "chen.x@email.com", experience: "Sagrada Família Skip-Line",
+    value: 340, riskScore: 81, riskLevel: "high", tenure: "1 month",
+    signals: [
+      { label: "7 refunds in 5 months", type: "critical", icon: "↺" },
+      { label: "QR scanned, entry validated", type: "critical", icon: "⬡" },
+      { label: "Shared IP with 2 flagged accounts", type: "critical", icon: "⚠" },
+      { label: "High-value booking, last-minute cancel", type: "critical", icon: "⏱" },
+    ],
+    recommendation: "Reject & Escalate", bookingLead: "45 minutes",
+    engagementMismatch: true, networkRisk: true,
+  },
+];
+
+const fraudInsights = {
+  fraudPrevented: 12400, autoApproved: 67, escalated: 8, manualReview: 25,
+  topPatterns: [
+    { pattern: "Serial refunders (>10 refunds/6mo)", count: 34, trend: "+12%" },
+    { pattern: "Last-minute high-value cancellations", count: 28, trend: "+5%" },
+    { pattern: "QR scan + refund claim", count: 19, trend: "-3%" },
+    { pattern: "Shared payment method clusters", count: 11, trend: "+18%" },
+  ],
+  volumeData: [42, 38, 51, 45, 62, 58, 47, 53, 61, 55, 48, 67],
+  months: ["Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan"],
+};
+
+const riskColor = (level) => ({
+  high:   { text: "#f87171", badgeBg: "rgba(239,68,68,0.15)",   badgeBorder: "rgba(239,68,68,0.3)",   cardBg: "rgba(127,29,29,0.25)",  cardBorder: "rgba(127,29,29,0.4)" },
+  medium: { text: "#fbbf24", badgeBg: "rgba(251,191,36,0.15)",  badgeBorder: "rgba(251,191,36,0.3)",  cardBg: "rgba(120,53,15,0.25)",  cardBorder: "rgba(120,53,15,0.4)" },
+  low:    { text: "#34d399", badgeBg: "rgba(52,211,153,0.15)",  badgeBorder: "rgba(52,211,153,0.3)",  cardBg: "rgba(6,78,59,0.25)",    cardBorder: "rgba(6,78,59,0.4)"  },
+}[level]);
+
+function RiskGauge({ score }) {
+  const angle = (score / 100) * 180 - 90;
+  const color = score >= 61 ? "#f87171" : score >= 31 ? "#fbbf24" : "#34d399";
+  const rad = (angle * Math.PI) / 180;
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center" }}>
+      <svg width="120" height="68" viewBox="0 0 120 68">
+        <defs>
+          <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#34d399" />
+            <stop offset="50%" stopColor="#fbbf24" />
+            <stop offset="100%" stopColor="#f87171" />
+          </linearGradient>
+        </defs>
+        <path d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke="#1f2937" strokeWidth="10" strokeLinecap="round"/>
+        <path d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke="url(#gaugeGrad)" strokeWidth="10" strokeLinecap="round" opacity="0.8"/>
+        <line x1="60" y1="60" x2={60 + 38*Math.cos(rad)} y2={60 + 38*Math.sin(rad)} stroke={color} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="60" cy="60" r="4" fill={color}/>
+      </svg>
+      <div style={{ textAlign:"center", marginTop:-4 }}>
+        <span style={{ fontSize:24, fontWeight:700, color, fontFamily:"'DM Mono',monospace" }}>{score}</span>
+        <span style={{ fontSize:11, color:"#4a5568", display:"block" }}>/ 100</span>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [activeTab, setActiveTab] = useState("queue");
+  const [selected, setSelected] = useState(refundRequests[0]);
+  const [actionTaken, setActionTaken] = useState({});
+  const [filter, setFilter] = useState("all");
+
+  const filtered = filter === "all" ? refundRequests : refundRequests.filter(r => r.riskLevel === filter);
+  const rc = selected ? riskColor(selected.riskLevel) : null;
+  const done = selected ? actionTaken[selected.id] : null;
+
+  return (
+    <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:"#080c14", minHeight:"100vh", color:"#e2e8f0" }}>
+
+      {/* Header */}
+      <div style={{ borderBottom:"1px solid #1a2236", background:"#0a0f1a", padding:"10px 24px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:8, height:8, borderRadius:2, background:"#6366f1", boxShadow:"0 0 10px #6366f1" }}/>
+          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:13, color:"#6366f1", letterSpacing:"0.15em", fontWeight:500 }}>
+            HEADOUT // REFUND INTELLIGENCE
+          </span>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+          <div style={{ display:"flex", gap:4 }}>
+            {["queue","insights"].map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)} style={{
+                padding:"5px 14px", borderRadius:6, fontSize:12, fontWeight:500,
+                letterSpacing:"0.05em", textTransform:"uppercase", border:"1px solid",
+                background: activeTab===tab ? "#6366f1" : "transparent",
+                borderColor: activeTab===tab ? "#6366f1" : "#1e2d45",
+                color: activeTab===tab ? "#fff" : "#6b7fa3",
+                transition:"all 0.2s",
+              }}>
+                {tab === "queue" ? "Review Queue" : "Fraud Insights"}
+              </button>
+            ))}
+          </div>
+          <span style={{ fontSize:12, color:"#4a5568", fontFamily:"'DM Mono',monospace" }}>
+            {new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+          </span>
+        </div>
+      </div>
+
+      {activeTab === "queue" ? (
+        <div style={{ display:"flex", height:"calc(100vh - 49px)" }}>
+
+          {/* Left Panel */}
+          <div style={{ width:300, borderRight:"1px solid #1a2236", background:"#090d18", overflowY:"auto", flexShrink:0 }}>
+            <div style={{ padding:"10px 14px", borderBottom:"1px solid #1a2236", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <span style={{ fontSize:11, fontWeight:600, letterSpacing:"0.12em", color:"#6b7fa3", textTransform:"uppercase" }}>
+                Pending ({filtered.length})
+              </span>
+              <div style={{ display:"flex", gap:3 }}>
+                {["all","high","medium","low"].map(f => (
+                  <button key={f} onClick={() => setFilter(f)} style={{
+                    padding:"2px 7px", borderRadius:4, fontSize:10, border:"1px solid",
+                    background: filter===f ? "#6366f1" : "transparent",
+                    borderColor: filter===f ? "#6366f1" : "#1e2d45",
+                    color: filter===f ? "#fff" : "#4a5568", fontWeight:500,
+                  }}>{f}</button>
+                ))}
+              </div>
+            </div>
+            {filtered.map(req => {
+              const rcq = riskColor(req.riskLevel);
+              const isSelected = selected?.id === req.id;
+              const isDone = actionTaken[req.id];
+              return (
+                <div key={req.id} onClick={() => setSelected(req)} style={{
+                  padding:"14px 16px", borderBottom:"1px solid #111827", cursor:"pointer",
+                  background: isSelected ? "#0f1929" : "transparent",
+                  borderLeft: isSelected ? "2px solid #6366f1" : "2px solid transparent",
+                  opacity: isDone ? 0.5 : 1, transition:"all 0.15s",
+                }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                    <div>
+                      <div style={{ fontFamily:"'DM Mono',monospace", fontSize:11, color:"#4a5568" }}>{req.id}</div>
+                      <div style={{ fontSize:13, fontWeight:500, color:"#c9d5e8", marginTop:2 }}>
+                        {req.experience.length > 22 ? req.experience.slice(0,22)+"…" : req.experience}
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:14, fontWeight:600, color:"#e2e8f0" }}>${req.value}</div>
+                      <span style={{ fontSize:10, padding:"2px 6px", borderRadius:3, fontWeight:600,
+                        background: rcq.badgeBg, border:`1px solid ${rcq.badgeBorder}`, color: rcq.text }}>
+                        {req.riskScore}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:11, color:"#4a5568" }}>{req.customer}</div>
+                  {isDone && <div style={{ fontSize:10, color:"#6366f1", marginTop:4, fontWeight:500 }}>✓ {isDone}</div>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Detail Panel */}
+          {selected && (
+            <div style={{ flex:1, overflowY:"auto", background:"#080c14" }}>
+              {/* Top bar */}
+              <div style={{ borderBottom:"1px solid #1a2236", background:"#090d18", padding:"16px 32px", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                <div>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+                    <span style={{ fontFamily:"'DM Mono',monospace", fontSize:12, color:"#4a5568" }}>{selected.id}</span>
+                    <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:600,
+                      background: rc.badgeBg, border:`1px solid ${rc.badgeBorder}`, color: rc.text }}>
+                      {selected.riskLevel.toUpperCase()} RISK
+                    </span>
+                    {done && <span style={{ fontSize:11, color:"#6366f1", fontWeight:500 }}>✓ {done}</span>}
+                  </div>
+                  <div style={{ fontSize:20, fontWeight:600, color:"#e2e8f0" }}>{selected.experience}</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:28, fontWeight:700, color:"#e2e8f0" }}>${selected.value}</div>
+                  <div style={{ fontSize:11, color:"#4a5568" }}>Refund Requested</div>
+                </div>
+              </div>
+
+              <div style={{ padding:"24px 32px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+
+                {/* Risk Score */}
+                <div style={{ background:"#0d1628", border:"1px solid #1a2236", borderRadius:12, padding:20 }}>
+                  <div style={{ fontSize:11, color:"#4a5568", letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:600, marginBottom:14 }}>Risk Assessment</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+                    <RiskGauge score={selected.riskScore}/>
+                    <div>
+                      <div style={{ fontSize:13, color:"#6b7fa3", marginBottom:2 }}>Classification</div>
+                      <div style={{ fontSize:16, fontWeight:600, color: rc.text }}>
+                        {selected.riskLevel === "high" ? "High Risk" : selected.riskLevel === "medium" ? "Medium Risk" : "Low Risk"}
+                      </div>
+                      <div style={{ fontSize:11, color:"#4a5568", marginTop:10 }}>Customer Tenure</div>
+                      <div style={{ fontSize:13, color:"#c9d5e8" }}>{selected.tenure}</div>
+                      <div style={{ fontSize:11, color:"#4a5568", marginTop:6 }}>Booking Lead Time</div>
+                      <div style={{ fontSize:13, color:"#c9d5e8" }}>{selected.bookingLead}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recommendation */}
+                <div style={{ background:"#0d1628", border:`1px solid ${rc.cardBorder}`, borderRadius:12, padding:20 }}>
+                  <div style={{ fontSize:11, color:"#4a5568", letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:600, marginBottom:14 }}>System Recommendation</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+                    <div style={{ width:36, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, background: rc.cardBg }}>
+                      {selected.riskLevel === "high" ? "⛔" : selected.riskLevel === "medium" ? "👁" : "✅"}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:15, fontWeight:600, color: rc.text }}>{selected.recommendation}</div>
+                      <div style={{ fontSize:11, color:"#4a5568" }}>Based on {selected.signals.length} signals</div>
+                    </div>
+                  </div>
+                  <div style={{ background:"#060a12", borderRadius:8, padding:"10px 14px" }}>
+                    <div style={{ fontSize:11, color:"#4a5568", marginBottom:6 }}>Model Confidence</div>
+                    <div style={{ height:4, background:"#1a2236", borderRadius:2, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${Math.abs(selected.riskScore-50)*2}%`,
+                        background: selected.riskLevel==="high" ? "#ef4444" : selected.riskLevel==="medium" ? "#f59e0b" : "#10b981",
+                        borderRadius:2 }}/>
+                    </div>
+                    <div style={{ fontSize:10, color:"#6b7fa3", marginTop:4, fontFamily:"'DM Mono',monospace" }}>
+                      {Math.abs(selected.riskScore-50)*2}% confidence
+                    </div>
+                  </div>
+                </div>
+
+                {/* Evidence Signals */}
+                <div style={{ background:"#0d1628", border:"1px solid #1a2236", borderRadius:12, padding:20, gridColumn:"1/-1" }}>
+                  <div style={{ fontSize:11, color:"#4a5568", letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:600, marginBottom:14 }}>Evidence Signals</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+                    {selected.signals.map((sig, i) => {
+                      const sigBg = sig.type==="critical" ? "rgba(127,29,29,0.25)" : sig.type==="warning" ? "rgba(120,53,15,0.25)" : sig.type==="positive" ? "rgba(6,78,59,0.25)" : "#0d1628";
+                      const sigBorder = sig.type==="critical" ? "rgba(127,29,29,0.5)" : sig.type==="warning" ? "rgba(120,53,15,0.5)" : sig.type==="positive" ? "rgba(6,78,59,0.5)" : "#1a2236";
+                      const sigColor = sig.type==="critical" ? "#fca5a5" : sig.type==="warning" ? "#fcd34d" : sig.type==="positive" ? "#6ee7b7" : "#9ca3af";
+                      return (
+                        <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", borderRadius:8, background:sigBg, border:`1px solid ${sigBorder}` }}>
+                          <span style={{ fontSize:16, width:20, textAlign:"center" }}>{sig.icon}</span>
+                          <span style={{ fontSize:13, color:sigColor }}>{sig.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ background:"#0d1628", border:"1px solid #1a2236", borderRadius:12, padding:20, gridColumn:"1/-1" }}>
+                  <div style={{ fontSize:11, color:"#4a5568", letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:600, marginBottom:14 }}>Agent Action</div>
+                  {done ? (
+                    <div style={{ padding:"14px 20px", borderRadius:8, background:"#0a0f1a", border:"1px solid rgba(99,102,241,0.3)", color:"#6366f1", fontSize:14, fontWeight:500 }}>
+                      ✓ Action recorded: <strong>{done}</strong> — Case resolved
+                    </div>
+                  ) : (
+                    <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                      {[
+                        { label:"Approve Refund",  action:"Approved",      bg:"rgba(6,78,59,0.3)",     border:"#059669", color:"#34d399" },
+                        { label:"Reject Refund",   action:"Rejected",      bg:"rgba(127,29,29,0.3)",   border:"#dc2626", color:"#f87171" },
+                        { label:"Offer Credit",    action:"Credit Offered",bg:"rgba(30,58,95,0.3)",    border:"#3b82f6", color:"#60a5fa" },
+                        { label:"Escalate",        action:"Escalated",     bg:"rgba(76,29,149,0.3)",   border:"#7c3aed", color:"#a78bfa" },
+                        { label:"Reschedule",      action:"Rescheduled",   bg:"rgba(26,34,54,0.5)",    border:"#374151", color:"#9ca3af" },
+                      ].map(({ label, action, bg, border, color }) => (
+                        <button key={label} onClick={() => setActionTaken(prev => ({ ...prev, [selected.id]: action }))} style={{
+                          padding:"10px 18px", borderRadius:8, fontSize:13, fontWeight:500,
+                          background:bg, border:`1px solid ${border}`, color, transition:"all 0.15s",
+                        }}>{label}</button>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize:11, color:"#4a5568", marginTop:10 }}>Agent actions override system recommendation. All decisions are logged for audit.</div>
+                </div>
+
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Insights Tab */
+        <div style={{ padding:"28px 32px", maxWidth:1100 }}>
+          <div style={{ fontSize:20, fontWeight:600, color:"#e2e8f0", marginBottom:4 }}>Fraud Intelligence Dashboard</div>
+          <div style={{ fontSize:13, color:"#4a5568", marginBottom:28 }}>Last 30 days · Real-time signals</div>
+
+          {/* KPIs */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:24 }}>
+            {[
+              { label:"Fraud Prevented",  value:`$${fraudInsights.fraudPrevented.toLocaleString()}`, sub:"estimated this month",     color:"#34d399" },
+              { label:"Auto-Approved",    value:`${fraudInsights.autoApproved}%`,                    sub:"of all refund requests",   color:"#60a5fa" },
+              { label:"Escalated",        value:`${fraudInsights.escalated}%`,                       sub:"sent to fraud team",       color:"#f87171" },
+              { label:"Manual Review",    value:`${fraudInsights.manualReview}%`,                    sub:"agent intervention",       color:"#fbbf24" },
+            ].map(kpi => (
+              <div key={kpi.label} style={{ background:"#0d1628", border:"1px solid #1a2236", borderRadius:12, padding:"18px 20px" }}>
+                <div style={{ fontSize:11, color:"#4a5568", textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:600 }}>{kpi.label}</div>
+                <div style={{ fontSize:28, fontWeight:700, color:kpi.color, fontFamily:"'DM Mono',monospace", marginTop:6 }}>{kpi.value}</div>
+                <div style={{ fontSize:11, color:"#4a5568", marginTop:2 }}>{kpi.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:20 }}>
+
+            {/* Top Patterns */}
+            <div style={{ background:"#0d1628", border:"1px solid #1a2236", borderRadius:12, padding:24 }}>
+              <div style={{ fontSize:11, color:"#4a5568", letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:600, marginBottom:18 }}>Top Fraud Patterns</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {fraudInsights.topPatterns.map((p, i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", background:"#060a12", borderRadius:8, border:"1px solid #111827" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <div style={{ width:6, height:6, borderRadius:"50%", background: i===0?"#f87171":i===1?"#fbbf24":i===2?"#fb923c":"#a78bfa" }}/>
+                      <span style={{ fontSize:13, color:"#c9d5e8" }}>{p.pattern}</span>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <span style={{ fontFamily:"'DM Mono',monospace", fontSize:13, color:"#6b7fa3" }}>{p.count} cases</span>
+                      <span style={{ fontSize:11, padding:"2px 6px", borderRadius:4, fontWeight:600,
+                        background: p.trend.startsWith("+") ? "rgba(127,29,29,0.3)" : "rgba(6,78,59,0.3)",
+                        color: p.trend.startsWith("+") ? "#f87171" : "#34d399" }}>{p.trend}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Volume Chart */}
+            <div style={{ background:"#0d1628", border:"1px solid #1a2236", borderRadius:12, padding:24 }}>
+              <div style={{ fontSize:11, color:"#4a5568", letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:600, marginBottom:18 }}>Refund Volume Trend</div>
+              <div style={{ display:"flex", alignItems:"flex-end", gap:5, height:90, marginBottom:8 }}>
+                {fraudInsights.volumeData.map((v, i) => {
+                  const max = Math.max(...fraudInsights.volumeData);
+                  const h = (v / max) * 75;
+                  return (
+                    <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center" }}>
+                      <div style={{ width:"100%", height:h, background: i===11 ? "#6366f1" : "#1e3a5f", borderRadius:"3px 3px 0 0" }}/>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between" }}>
+                {fraudInsights.months.map(m => (
+                  <span key={m} style={{ fontSize:9, color:"#374151", fontFamily:"'DM Mono',monospace" }}>{m}</span>
+                ))}
+              </div>
+              <div style={{ marginTop:16, paddingTop:14, borderTop:"1px solid #1a2236" }}>
+                <div style={{ fontSize:11, color:"#4a5568", marginBottom:10 }}>Decision Breakdown (30 days)</div>
+                <div style={{ display:"flex", gap:10 }}>
+                  {[["Auto","67%","#34d399"],["Review","25%","#fbbf24"],["Escalate","8%","#f87171"]].map(([l,v,c]) => (
+                    <div key={l} style={{ flex:1, padding:"8px 10px", borderRadius:6, background:"#060a12" }}>
+                      <div style={{ fontSize:10, color:"#4a5568" }}>{l}</div>
+                      <div style={{ fontSize:16, fontWeight:700, color:c, fontFamily:"'DM Mono',monospace" }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
